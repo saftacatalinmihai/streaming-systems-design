@@ -1,11 +1,9 @@
-package com.mihaisafta
-
-import akka.{Done, NotUsed}
 import akka.stream.FlowShape
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Merge}
+import akka.{Done, NotUsed}
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.{Duration, DurationInt}
+import scala.concurrent.{Await, Future}
 
 object GraphPattern {
 
@@ -48,7 +46,7 @@ object GraphPattern {
 
     // format: off
     F ~> B ~> throughInner ~> M
-    B ~>            bypass ~> M
+    B ~> bypass ~> M
     // format: on
 
     new FlowShape(F.in, M.out)
@@ -57,8 +55,11 @@ object GraphPattern {
   final case class RawInput(raw: String) {
     def toUser(userId: String): User = User(userId, raw)
   }
+
   final case class User(raw: String, userId: String, userPermissions: Option[List[String]] = None, newsletter: Option[String] = None, sent: Boolean = false)
+
   final case class UserPermissions(raw: String, userId: String, userPermissions: List[String], newsletter: Option[String] = None, sent: Boolean = false)
+
   final case class UserNewsletter(raw: String, userId: String, userPermissions: List[String], newsletter: String, sent: Boolean)
 
   def parse(raw: RawInput): User = {
@@ -76,7 +77,7 @@ object GraphPattern {
   def getNewsletter(userPermissions: UserPermissions): UserNewsletter = {
     println(s"getNewsletter for user: $userPermissions")
     val newsletter = "newsletter1"
-    UserNewsletter(userPermissions.raw, userPermissions.userId, userPermissions.userPermissions, newsletter, sent=false)
+    UserNewsletter(userPermissions.raw, userPermissions.userId, userPermissions.userPermissions, newsletter, sent = false)
   }
 
   def sendNewsletter(userNewsletter: UserNewsletter): UserNewsletter = {
@@ -87,26 +88,29 @@ object GraphPattern {
   val repository: Repository = Repository(Map.empty)
 
   final case class T1(raw: RawInput)
+
   final case class T2(raw: String, user: User, userPermissions: Option[UserPermissions] = None, userNewsletter: Option[String] = None, sent: Boolean = false)
+
   final case class T3(raw: String, userId: String, userPermissions: List[String], newsletter: Option[String] = None, sent: Boolean = false)
+
   final case class T4(raw: String, userId: String, userPermissions: List[String], newsletter: String, sent: Boolean)
 
   val parseFlow: Flow[RawInput, User, NotUsed] =
     Flow[RawInput].map(parse)
 
   val getPermissionsFlow: Flow[User, UserPermissions, NotUsed] =
-    Flow[User].map(getPermissions).map{up => repository.savePermissions(up.userId, up.userPermissions); up}
+    Flow[User].map(getPermissions).map { up => repository.savePermissions(up.userId, up.userPermissions); up }
 
   val getNewsletterFlow: Flow[UserPermissions, UserNewsletter, NotUsed] =
-    Flow[UserPermissions].map(getNewsletter).map{n => repository.saveNewsletter(n.userId, n.newsletter); n}
+    Flow[UserPermissions].map(getNewsletter).map { n => repository.saveNewsletter(n.userId, n.newsletter); n }
 
   val sendNewsletterFlow: Flow[UserNewsletter, UserNewsletter, NotUsed] =
-    Flow[UserNewsletter].map(sendNewsletter).map{n => repository.saveNewsletterSent(n.userId, sent=true); n}
+    Flow[UserNewsletter].map(sendNewsletter).map { n => repository.saveNewsletterSent(n.userId, sent = true); n }
 
   final case class Repository(var db: Map[String, Any]) {
     def save(user: User): (Option[User], Option[List[String]], Option[String], Boolean) = {
       getState(user.userId) match {
-        case (None, None, None, false)=>
+        case (None, None, None, false) =>
           println(s"Saving received user: $user")
           db = db + (user.userId -> user)
           (None, None, None, false)
@@ -141,8 +145,8 @@ object GraphPattern {
   }
 
   def main(args: Array[String]): Unit = {
-    import akka.stream.scaladsl._
     import akka.actor.ActorSystem
+    import akka.stream.scaladsl._
 
     implicit val system: ActorSystem = ActorSystem("GraphPattern")
 
